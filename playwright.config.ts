@@ -5,6 +5,11 @@ import { defineConfig, devices } from '@playwright/test';
 // These point at the Docker Postgres container (port 5433) and the
 // admin credentials that prisma/seed.ts bcrypts into the test DB.
 // Also exported for use in specs (see specs/*.spec.ts).
+//
+// IMPORTANT: These values are duplicated in
+// server/src/test-helpers/test-config.ts (a separate git repo, so we
+// cannot share imports). If you change any value here, update the
+// matching constant there.
 // ---------------------------------------------------------------
 export const TEST_DATABASE_URL =
   'postgresql://postgres:test@localhost:5433/portfolio_test';
