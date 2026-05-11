@@ -53,6 +53,7 @@ export default defineConfig({
         TOKEN_SECRET: TEST_TOKEN_SECRET,
         ORIGIN: 'http://localhost:3000',
         PORT: '5005',
+        DISABLE_LOGIN_RATE_LIMIT: 'true',
       },
     },
     {
