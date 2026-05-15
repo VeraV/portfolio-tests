@@ -1,0 +1,16 @@
+name: E2E (on tests PR)
+
+# Runs the full E2E suite on every PR to portfolio-tests/main.
+# Uses this PR's branch for tests + main of server and client.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    uses: ./.github/workflows/_e2e-reusable.yml
+    with:
+      tests-ref: ${{ github.head_ref }}
+      server-ref: main
+      client-ref: main

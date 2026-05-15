@@ -1,0 +1,127 @@
+name: E2E (reusable)
+
+# Reusable workflow that runs the full Playwright suite.
+#
+# It checks out three repos (this one, portfolio-server, portfolio-client)
+# as siblings on the runner, spins up Postgres, installs everything, and
+# runs the suite. Callers (in this repo and the two app repos) provide the
+# git ref for each repo so the same workflow can test any combination.
+
+on:
+  workflow_call:
+    inputs:
+      tests-ref:
+        description: 'Git ref to check out from portfolio-tests'
+        required: true
+        type: string
+      server-ref:
+        description: 'Git ref to check out from portfolio-server'
+        required: true
+        type: string
+      client-ref:
+        description: 'Git ref to check out from portfolio-client'
+        required: true
+        type: string
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      # Postgres 15 on host port 5433 — matches TEST_DATABASE_URL in
+      # playwright.config.ts so the local and CI URLs are identical.
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: portfolio_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # ---------------------------------------------------------------
+      # Checkout three repos as siblings:
+      #   ${{ github.workspace }}/tests   (portfolio-tests)
+      #   ${{ github.workspace }}/server  (portfolio-server)
+      #   ${{ github.workspace }}/client  (portfolio-client)
+      # This matches the `cwd: '../server'` / `cwd: '../client'` paths
+      # in playwright.config.ts.
+      # ---------------------------------------------------------------
+
+      - name: Checkout portfolio-tests
+        uses: actions/checkout@v5
+        with:
+          repository: VeraV/portfolio-tests
+          ref: ${{ inputs.tests-ref }}
+          path: tests
+
+      - name: Checkout portfolio-server
+        uses: actions/checkout@v5
+        with:
+          repository: VeraV/portfolio-server
+          ref: ${{ inputs.server-ref }}
+          path: server
+
+      - name: Checkout portfolio-client
+        uses: actions/checkout@v5
+        with:
+          repository: VeraV/portfolio-client
+          ref: ${{ inputs.client-ref }}
+          path: client
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      # ---------------------------------------------------------------
+      # Install dependencies in all three projects.
+      # ---------------------------------------------------------------
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: server
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Install tests dependencies
+        run: npm ci
+        working-directory: tests
+
+      - name: Install Playwright browsers + system deps
+        run: npx playwright install --with-deps
+        working-directory: tests
+
+      # ---------------------------------------------------------------
+      # Run the suite. Playwright's webServer config starts both server
+      # and client itself; resetAndSeed() in spec beforeAll runs prisma
+      # migrate reset + seed against the Postgres service container.
+      # ---------------------------------------------------------------
+
+      - name: Run Playwright tests
+        run: npm test
+        working-directory: tests
+
+      # ---------------------------------------------------------------
+      # On failure, surface the Playwright HTML report so we can debug
+      # from the PR without re-running locally.
+      # ---------------------------------------------------------------
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/playwright-report
+          retention-days: 7
